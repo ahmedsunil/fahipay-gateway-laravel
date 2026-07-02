@@ -4,7 +4,7 @@ namespace Fahipay\Gateway\Http\Controllers\Api;
 
 use Illuminate\Routing\Controller;
 use Fahipay\Gateway\Actions\ProcessCallbackAction;
-use Fahipay\Gateway\Http\Requests\HandleCallbackRequest;
+use Fahipay\Gateway\Facades\FahipayGateway;
 use Fahipay\Gateway\Models\FahipayPayment;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,8 +20,18 @@ class WebhookController extends Controller
     {
         try {
             $transactionId = $request->get('ShoppingCartID');
-            $success = $request->get('Success') === 'true';
+            $success = in_array($request->get('Success'), ['true', '1'], true);
             $approvalCode = $request->get('ApprovalCode');
+
+            if (!FahipayGateway::validateStateChangingCallback($request)) {
+                Log::warning('FahiPay webhook: Invalid or unsigned state-changing callback', [
+                    'transaction_id' => $transactionId,
+                ]);
+
+                return response()->json([
+                    'error' => 'Invalid signature',
+                ], 400);
+            }
 
             $payment = FahipayPayment::where('transaction_id', $transactionId)->first();
 
@@ -42,7 +52,7 @@ class WebhookController extends Controller
                     'approval_code' => $approvalCode,
                 ]);
             } else {
-                $errorMessage = $request->get('Message', 'Payment failed');
+                $errorMessage = $request->get('ErrorMessage', $request->get('Message', 'Payment failed'));
                 $payment->markAsFailed($errorMessage);
                 Log::warning('FahiPay webhook: Payment failed', [
                     'transaction_id' => $transactionId,

@@ -4,12 +4,17 @@ namespace Fahipay\Gateway\Livewire;
 
 use Fahipay\Gateway\Facades\FahipayGateway;
 use Illuminate\Support\Str;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 class PaymentModal extends Component
 {
     public bool $showModal = false;
+    // Locked: these values are set server-side and must not be mutable from the
+    // client before creating a payment.
+    #[Locked]
     public string $transactionId = '';
+    #[Locked]
     public float $amount = 0;
     public ?string $description = null;
     public ?string $customerEmail = null;
@@ -55,7 +60,8 @@ class PaymentModal extends Component
     public function generateTransactionId(): void
     {
         $prefix = config('fahipay.payment.prefix', 'PAY');
-        $this->transactionId = $prefix . '-' . Str::random(12);
+        $length = (int) config('fahipay.payment.unique_id_length', 12);
+        $this->transactionId = $prefix . '-' . Str::random(max(1, $length));
     }
 
     public function initiatePayment(): void

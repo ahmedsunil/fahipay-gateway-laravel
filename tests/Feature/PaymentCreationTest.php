@@ -1,11 +1,14 @@
 <?php
 
 use Fahipay\Gateway\Facades\FahipayGateway;
+use Fahipay\Gateway\FahipayGateway as Gateway;
 use Fahipay\Gateway\Models\FahipayPayment;
 use Fahipay\Gateway\Enums\PaymentStatus;
+use Fahipay\Gateway\Events\PaymentCompletedEvent;
+use Illuminate\Support\Facades\Event;
 
 beforeEach(function () {
-    config(['fahipay.merchant_id' => 'test_merchant']);
+    config(['fahipay.shop_id' => 'test_shop']);
     config(['fahipay.secret_key' => 'test_secret']);
     config(['fahipay.test_mode' => true]);
     config(['fahipay.return_url' => 'http://localhost/return']);
@@ -22,23 +25,23 @@ test('can create payment via facade', function () {
 });
 
 test('can generate valid signature', function () {
-    $signature = FahipayGateway::generateSignature('TEST-001', 100.00, '2024-01-01 12:00:00');
+    $signature = FahipayGateway::generateSignature('TEST-001', 10000, 1700000000);
 
-    expect($signature)->toBeString()
-        ->not->toBeEmpty();
+    expect($signature)->toBeString()->not->toBeEmpty();
 });
 
-test('can verify valid signature', function () {
-    $gateway = app(\Fahipay\Gateway\FahipayGateway::class);
-    $signature = $gateway->generateSignature('TEST-001', 100.00, '2024-01-01 12:00:00');
+test('can verify valid callback signature', function () {
+    $gateway = app(Gateway::class);
+    $timestamp = time();
+    $signature = $gateway->generateCallbackSignature('true', 'TEST-001', 'APPROVAL123', $timestamp);
 
-    $isValid = $gateway->verifySignature('true', 'TEST-001', 'APPROVAL123', $signature);
+    $isValid = $gateway->verifySignature('true', 'TEST-001', 'APPROVAL123', $timestamp, $signature);
 
     expect($isValid)->toBeTrue();
 });
 
 test('detects invalid signature', function () {
-    $isValid = FahipayGateway::verifySignature('true', 'TEST-001', 'APPROVAL123', 'invalid_signature');
+    $isValid = FahipayGateway::verifySignature('true', 'TEST-001', 'APPROVAL123', time(), 'invalid_signature');
 
     expect($isValid)->toBeFalse();
 });
@@ -56,52 +59,45 @@ test('checks test mode status', function () {
 });
 
 test('can set custom return url', function () {
-    $gateway = app(\Fahipay\Gateway\FahipayGateway::class);
-    $gateway->setReturnUrl('https://custom.com/return');
+    FahipayGateway::setReturnUrl('https://custom.com/return');
 
-    // Config should be updated
-    expect(config('fahipay.return_url'))->toBe('https://custom.com/return');
+    expect(FahipayGateway::getReturnUrl())->toBe('https://custom.com/return');
 });
 
-test('can set custom merchant credentials', function () {
-    FahipayGateway::setMerchantId('custom_merchant')
-        ->setSecretKey('custom_secret');
+test('can set custom shop credentials', function () {
+    FahipayGateway::setShopId('custom_shop')->setSecretKey('custom_secret');
 
-    expect(FahipayGateway::getMerchantId())->toBe('custom_merchant');
+    expect(FahipayGateway::getShopId())->toBe('custom_shop');
 });
 
 test('fahipay payment model can be created', function () {
     $payment = FahipayPayment::createPayment(
         'TEST-001',
-        'test_merchant',
+        'test_shop',
         100.00,
         'Test payment'
     );
 
     expect($payment->transaction_id)->toBe('TEST-001');
-    expect($payment->amount)->toBe(100.00);
+    expect((float) $payment->amount)->toBe(100.00);
     expect($payment->status)->toBe(PaymentStatus::PENDING);
 });
 
 test('fahipay payment model can mark as completed', function () {
-    $payment = FahipayPayment::createPayment(
-        'TEST-002',
-        'test_merchant',
-        50.00
-    );
+    Event::fake([PaymentCompletedEvent::class]);
+
+    $payment = FahipayPayment::createPayment('TEST-002', 'test_shop', 50.00);
 
     $payment->markAsCompleted('APPROVAL123');
 
     expect($payment->fresh()->status)->toBe(PaymentStatus::COMPLETED);
     expect($payment->fresh()->approval_code)->toBe('APPROVAL123');
+
+    Event::assertDispatched(PaymentCompletedEvent::class);
 });
 
 test('fahipay payment model can mark as failed', function () {
-    $payment = FahipayPayment::createPayment(
-        'TEST-003',
-        'test_merchant',
-        75.00
-    );
+    $payment = FahipayPayment::createPayment('TEST-003', 'test_shop', 75.00);
 
     $payment->markAsFailed('Card declined');
 
@@ -117,9 +113,27 @@ test('payment status enum works correctly', function () {
 });
 
 test('can get payment url', function () {
-    $url = FahipayGateway::getPaymentUrl('TEST-001', 100.00);
+    $gateway = new class extends Gateway {
+        protected function requestPaymentRedirect(string $webUrl, array $params, string $cookiePath): ?string
+        {
+            return 'https://test.fahipay.mv/payment/session-123';
+        }
+    };
+
+    $url = $gateway->getPaymentUrl('TEST-001', 100.00);
 
     expect($url)->toBeString()
-        ->toContain('TEST-001')
-        ->toContain('100.00');
+        ->toBe('https://test.fahipay.mv/payment/session-123');
+});
+
+test('payment url fails when fahipay does not return a valid redirect', function () {
+    $gateway = new class extends Gateway {
+        protected function requestPaymentRedirect(string $webUrl, array $params, string $cookiePath): ?string
+        {
+            return null;
+        }
+    };
+
+    expect(fn () => $gateway->getPaymentUrl('TEST-001', 100.00))
+        ->toThrow(\Fahipay\Gateway\Exceptions\FahipayException::class, 'Unable to create FahiPay payment redirect');
 });

@@ -36,7 +36,7 @@ if (!function_exists('fahipay_redirect')) {
 }
 
 if (!function_exists('fahipay_config')) {
-    function fahipay_config(string $key = null, $default = null)
+    function fahipay_config(?string $key = null, $default = null)
     {
         $config = config('fahipay');
         

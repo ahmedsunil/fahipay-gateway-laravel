@@ -1,99 +1,91 @@
 <?php
 
-use Fahipay\Gateway\Facades\FahipayGateway;
 use Fahipay\Gateway\FahipayGateway as Gateway;
+use Fahipay\Gateway\Contracts\GatewayInterface;
 
 beforeEach(function () {
-    config(['fahipay.merchant_id' => 'test_merchant']);
+    config(['fahipay.shop_id' => 'test_shop']);
     config(['fahipay.secret_key' => 'test_secret']);
     config(['fahipay.test_mode' => true]);
 });
 
 test('gateway can be instantiated', function () {
-    $gateway = app(FahipayGateway::class);
-    
+    $gateway = app(Gateway::class);
+
     expect($gateway)->toBeInstanceOf(Gateway::class);
 });
 
+test('gateway interface resolves to compatible implementation', function () {
+    $gateway = app(GatewayInterface::class);
+
+    expect($gateway)->toBeInstanceOf(GatewayInterface::class)
+        ->and($gateway)->toBeInstanceOf(Gateway::class);
+});
+
 test('gateway checks if configured', function () {
-    $gateway = app(FahipayGateway::class);
-    
+    $gateway = app(Gateway::class);
+
     expect($gateway->isConfigured())->toBeTrue();
 });
 
-test('gateway gets merchant id', function () {
-    $gateway = app(FahipayGateway::class);
-    
-    expect($gateway->getMerchantId())->toBe('test_merchant');
+test('gateway gets shop id', function () {
+    $gateway = app(Gateway::class);
+
+    expect($gateway->getShopId())->toBe('test_shop');
 });
 
-test('gateway can set custom merchant id', function () {
-    $gateway = app(FahipayGateway::class);
-    $gateway->setMerchantId('custom_merchant');
-    
-    expect($gateway->getMerchantId())->toBe('custom_merchant');
+test('gateway can set custom shop id', function () {
+    $gateway = app(Gateway::class);
+    $gateway->setShopId('custom_shop');
+
+    expect($gateway->getShopId())->toBe('custom_shop');
 });
 
 test('gateway can toggle test mode', function () {
-    $gateway = app(FahipayGateway::class);
-    
+    config(['fahipay.web_url' => 'https://fahipay.mv']);
+    config(['fahipay.test_web_url' => 'https://test.fahipay.mv']);
+
+    $gateway = new Gateway();
+
     expect($gateway->isTestMode())->toBeTrue();
-    
+    expect($gateway->getWebUrl())->toBe('https://test.fahipay.mv');
+
     $gateway->setTestMode(false);
-    
+
     expect($gateway->isTestMode())->toBeFalse();
+    expect($gateway->getWebUrl())->toBe('https://fahipay.mv');
 });
 
 test('gateway generates valid signature', function () {
-    $gateway = app(FahipayGateway::class);
-    
-    $signature = $gateway->generateSignature(
-        'TEST-001',
-        100.00,
-        '2024-01-01 12:00:00'
-    );
-    
-    expect($signature)->toBeString()
-        ->not->toBeEmpty();
+    $gateway = app(Gateway::class);
+
+    $signature = $gateway->generateSignature('TEST-001', 10000, 1700000000);
+
+    expect($signature)->toBeString()->not->toBeEmpty();
 });
 
-test('gateway verifies signature correctly', function () {
-    $gateway = app(FahipayGateway::class);
-    
-    $signature = $gateway->generateSignature(
-        'TEST-001',
-        100.00,
-        '2024-01-01 12:00:00'
-    );
-    
-    $isValid = $gateway->verifySignature(
-        'true',
-        'TEST-001',
-        'APPROVAL123',
-        $signature
-    );
-    
+test('gateway verifies callback signature correctly', function () {
+    $gateway = app(Gateway::class);
+
+    $timestamp = time();
+    $signature = $gateway->generateCallbackSignature('true', 'TEST-001', 'APPROVAL123', $timestamp);
+
+    $isValid = $gateway->verifySignature('true', 'TEST-001', 'APPROVAL123', $timestamp, $signature);
+
     expect($isValid)->toBeTrue();
 });
 
 test('gateway detects invalid signature', function () {
-    $gateway = app(FahipayGateway::class);
-    
-    $isValid = $gateway->verifySignature(
-        'true',
-        'TEST-001',
-        'APPROVAL123',
-        'invalid_signature'
-    );
-    
+    $gateway = app(Gateway::class);
+
+    $isValid = $gateway->verifySignature('true', 'TEST-001', 'APPROVAL123', time(), 'invalid_signature');
+
     expect($isValid)->toBeFalse();
 });
 
 test('gateway can set return url', function () {
-    $gateway = app(FahipayGateway::class);
+    $gateway = app(Gateway::class);
     $gateway->setReturnUrl('https://example.com/return');
-    
-    $config = $gateway->getConfig();
-    
-    expect($config['return_url'])->toBe('https://example.com/return');
+
+    expect($gateway->getReturnUrl())->toBe('https://example.com/return');
 });

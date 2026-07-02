@@ -19,7 +19,10 @@ class FahipayPaymentObserver
     public function updated(FahipayPayment $payment): void
     {
         if ($payment->wasChanged('status')) {
-            $oldStatus = PaymentStatus::fromString($payment->getOriginal('status'));
+            $originalStatus = $payment->getOriginal('status');
+            $oldStatus = $originalStatus instanceof PaymentStatus
+                ? $originalStatus
+                : PaymentStatus::fromString((string) $originalStatus);
             $newStatus = $payment->status;
 
             \Illuminate\Support\Facades\Log::info('FahiPay: Payment status changed', [

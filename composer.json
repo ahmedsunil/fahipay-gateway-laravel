@@ -58,6 +58,10 @@
             ]
         }
     },
+    "scripts": {
+        "test": "pest",
+        "test:coverage": "pest --coverage"
+    },
     "minimum-stability": "stable",
     "prefer-stable": true,
     "config": {

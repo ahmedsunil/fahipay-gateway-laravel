@@ -21,7 +21,22 @@ interface GatewayInterface
     /**
      * Verify callback signature
      */
-    public function verifySignature(string $success, string $transactionId, ?string $approvalCode, string $signature): bool;
+    public function verifySignature(string $success, string $transactionId, ?string $approvalCode, int|string $signatureOrTimestamp, ?string $signature = null): bool;
+
+    /**
+     * Validate a signed callback from FahiPay
+     */
+    public function validateCallback(Request $request): bool;
+
+    /**
+     * Validate browser-return callbacks that are used only for display
+     */
+    public function validateDisplayCallback(Request $request): bool;
+
+    /**
+     * Validate callback that can change local merchant state
+     */
+    public function validateStateChangingCallback(Request $request): bool;
 
     /**
      * Handle callback from payment gateway

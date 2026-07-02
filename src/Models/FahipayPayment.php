@@ -2,8 +2,8 @@
 
 namespace Fahipay\Gateway\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Fahipay\Gateway\Enums\PaymentStatus;
+use Illuminate\Database\Eloquent\Model;
 
 class FahipayPayment extends Model
 {
@@ -52,6 +52,10 @@ class FahipayPayment extends Model
 
     public function markAsCompleted(?string $approvalCode = null): void
     {
+        if ($this->isCompleted()) {
+            return;
+        }
+
         $this->update([
             'status' => PaymentStatus::COMPLETED,
             'approval_code' => $approvalCode,
@@ -61,6 +65,12 @@ class FahipayPayment extends Model
 
     public function markAsFailed(?string $errorMessage = null): void
     {
+        // COMPLETED is terminal: a replayed or late failure callback must not
+        // undo a confirmed payment.
+        if ($this->isCompleted()) {
+            return;
+        }
+
         $this->update([
             'status' => PaymentStatus::FAILED,
             'error_message' => $errorMessage,
@@ -70,6 +80,10 @@ class FahipayPayment extends Model
 
     public function markAsCancelled(): void
     {
+        if ($this->isCompleted()) {
+            return;
+        }
+
         $this->update([
             'status' => PaymentStatus::CANCELLED,
             'completed_at' => now(),

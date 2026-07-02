@@ -1,6 +1,9 @@
 <?php
 
 use Fahipay\Gateway\FahipayGateway;
+use Fahipay\Gateway\Actions\CreatePaymentAction;
+use Fahipay\Gateway\Exceptions\FahipayException;
+use Fahipay\Gateway\Http\Requests\CreatePaymentRequest;
 
 beforeEach(function () {
     config(['fahipay.shop_id' => 'test_shop']);
@@ -14,63 +17,47 @@ beforeEach(function () {
 describe('Signature Validation Security', function () {
     test('prevents timing attacks with hash_equals', function () {
         $gateway = app(FahipayGateway::class);
-        
-        // Real signature
-        $realSignature = base64_encode(hash_hmac('sha256', 'test', 'key', true));
-        
-        // Attack: Try to guess signature byte by byte
-        // hash_equals should prevent timing attacks
+
         $startTime = microtime(true);
-        $gateway->verifySignature('true', 'TEST', 'APPROVAL', 'wrong_signature');
+        $gateway->verifySignature('true', 'TEST', 'APPROVAL', time(), 'wrong_signature');
         $time1 = microtime(true) - $startTime;
-        
+
         $startTime = microtime(true);
-        $gateway->verifySignature('true', 'TEST', 'APPROVAL', 'another_wrong');
+        $gateway->verifySignature('true', 'TEST', 'APPROVAL', time(), 'another_wrong');
         $time2 = microtime(true) - $startTime;
-        
-        // Times should be similar (within reason)
+
         expect($time1)->toBeLessThan(1);
         expect($time2)->toBeLessThan(1);
     });
 
     test('rejects empty signature', function () {
         $gateway = app(FahipayGateway::class);
-        
-        $isValid = $gateway->verifySignature('true', 'TEST', 'APPROVAL', '');
-        
-        expect($isValid)->toBeFalse();
+
+        expect($gateway->verifySignature('true', 'TEST', 'APPROVAL', time(), ''))->toBeFalse();
     });
 
     test('rejects signature with wrong transaction id', function () {
         $gateway = app(FahipayGateway::class);
-        
-        // Generate signature for TEST-001
-        $timestamp = now()->format('Y-m-d H:i:s');
-        $signature = $gateway->generateSignature('TEST-001', 100.00, $timestamp);
-        
-        // Try to use for different transaction
-        $isValid = $gateway->verifySignature('true', 'TEST-002', 'APPROVAL', $signature);
-        
+
+        $timestamp = time();
+        $signature = $gateway->generateCallbackSignature('true', 'TEST-001', 'APPROVAL', $timestamp);
+
+        // Same signature, different transaction id.
+        $isValid = $gateway->verifySignature('true', 'TEST-002', 'APPROVAL', $timestamp, $signature);
+
         expect($isValid)->toBeFalse();
     });
 
     test('rejects tampered success parameter', function () {
         $gateway = app(FahipayGateway::class);
-        
-        // Generate signature for success=true
-        $timestamp = now()->format('Y-m-d H:i:s');
-        $signature = $gateway->generateSignature('TEST-001', 0, $timestamp);
-        
-        // Create data that was signed
-        $data = 'test_merchant' . 'TEST-001' . 'APPROVAL123' . 'true';
-        $expectedSignature = base64_encode(hash_hmac('sha256', $data, 'test_secret_key_12345', true));
-        
-        // Try to change success to false
-        $dataTampered = 'test_merchant' . 'TEST-001' . 'APPROVAL123' . 'false';
-        $tamperedSignature = base64_encode(hash_hmac('sha256', $dataTampered, 'test_secret_key_12345', true));
-        
-        $isValid = $gateway->verifySignature('false', 'TEST-001', 'APPROVAL123', $expectedSignature);
-        
+
+        $timestamp = time();
+        // Signed as success=true...
+        $signature = $gateway->generateCallbackSignature('true', 'TEST-001', 'APPROVAL123', $timestamp);
+
+        // ...replayed as success=false.
+        $isValid = $gateway->verifySignature('false', 'TEST-001', 'APPROVAL123', $timestamp, $signature);
+
         expect($isValid)->toBeFalse();
     });
 });
@@ -79,43 +66,105 @@ describe('Signature Validation Security', function () {
  * Security Test: Input Validation
  */
 describe('Input Validation Security', function () {
-    test('rejects transaction id with special characters', function () {
+    test('generates signature for transaction id with special characters', function () {
         $gateway = app(FahipayGateway::class);
-        
-        $signature = $gateway->generateSignature('TEST<script>alert(1)</script>', 100.00, '2024-01-01 12:00:00');
-        
+
+        $signature = $gateway->generateSignature('TEST<script>alert(1)</script>', 10000, 1700000000);
+
         expect($signature)->toBeString();
-        // The signature should be generated but transaction ID should be sanitized in requests
     });
 
-    test('rejects negative amount', function () {
+    test('rejects non-positive amount', function () {
         $gateway = app(FahipayGateway::class);
-        
-        try {
-            $gateway->createPayment('TEST-001', -100.00);
-            expect(false)->toBeTrue(); // Should not reach here
-        } catch (\Fahipay\Gateway\Exceptions\FahipayException $e) {
-            expect($e->getMessage())->toContain('Merchant ID');
-        }
+
+        expect(fn () => $gateway->createPayment('TEST-001', -100.00))
+            ->toThrow(\Fahipay\Gateway\Exceptions\FahipayException::class, 'Amount must be greater than zero');
+    });
+
+    test('rejects invalid payment url inputs before signing', function () {
+        $gateway = app(FahipayGateway::class);
+
+        expect(fn () => $gateway->getLink('BAD ID', 100.00))
+            ->toThrow(FahipayException::class, 'Invalid transaction ID format');
+
+        expect(fn () => $gateway->getLink('TEST-001', 0))
+            ->toThrow(FahipayException::class, 'Amount must be greater than zero');
+
+        config(['fahipay.secret_key' => '']);
+        $gateway = new FahipayGateway();
+
+        expect(fn () => $gateway->getLink('TEST-001', 100.00))
+            ->toThrow(FahipayException::class, 'Shop ID and Secret Key are required');
+    });
+
+    test('custom callback urls are rejected by default', function () {
+        $action = app(CreatePaymentAction::class);
+
+        expect(fn () => $action->execute([
+            'transaction_id' => 'CALLBACK-URL-001',
+            'amount' => 100.00,
+            'callback_url' => 'https://merchant.example/callback',
+        ]))->toThrow(FahipayException::class, 'Callback URL host is not allowed');
+    });
+
+    test('custom callback urls require an allowed host unless explicitly unrestricted', function () {
+        config(['fahipay.allowed_redirect_hosts' => ['merchant.example']]);
+
+        $gateway = new class extends FahipayGateway {
+            public ?string $capturedReturnUrl = null;
+
+            public function createPayment(string $transactionId, float $amount, ?string $description = null, ?array $metadata = []): \Fahipay\Gateway\Data\PaymentData
+            {
+                $this->capturedReturnUrl = $this->getReturnUrl();
+
+                return new \Fahipay\Gateway\Data\PaymentData(
+                    transactionId: $transactionId,
+                    amount: $amount,
+                    status: \Fahipay\Gateway\Enums\PaymentStatus::PENDING,
+                    paymentUrl: 'https://test.fahipay.mv/payment/session-123'
+                );
+            }
+        };
+
+        app()->instance(FahipayGateway::class, $gateway);
+
+        app(CreatePaymentAction::class)->execute([
+            'transaction_id' => 'CALLBACK-URL-002',
+            'amount' => 100.00,
+            'callback_url' => 'https://merchant.example/callback',
+        ]);
+
+        expect($gateway->capturedReturnUrl)->toBe('https://merchant.example/callback');
     });
 
     test('handles extremely large amount safely', function () {
         $gateway = app(FahipayGateway::class);
-        
-        // Should handle gracefully
-        $signature = $gateway->generateSignature('TEST-001', 999999999.99, '2024-01-01 12:00:00');
-        
+
+        $signature = $gateway->generateSignature('TEST-001', 99999999999, 1700000000);
+
         expect($signature)->toBeString();
     });
 
-    test('rejects sql injection in transaction id', function () {
+    test('generates signature for sql-injection-like transaction id', function () {
         $gateway = app(FahipayGateway::class);
-        
+
         $maliciousId = "TEST-001'; DROP TABLE fahipay_payments;--";
-        $signature = $gateway->generateSignature($maliciousId, 100.00, '2024-01-01 12:00:00');
-        
-        // Signature should be generated but this ID should never be used directly in queries
+        $signature = $gateway->generateSignature($maliciousId, 10000, 1700000000);
+
         expect($signature)->toBeString();
+    });
+
+    test('generated request transaction ids support odd configured lengths', function () {
+        config(['fahipay.payment.unique_id_length' => 11]);
+
+        $request = new CreatePaymentRequest();
+        $method = new ReflectionMethod(CreatePaymentRequest::class, 'generateTransactionId');
+        $method->setAccessible(true);
+
+        $transactionId = $method->invoke($request);
+
+        expect($transactionId)->toStartWith('PAY-')
+            ->and(strlen(substr($transactionId, 4)))->toBe(11);
     });
 });
 
@@ -123,26 +172,41 @@ describe('Input Validation Security', function () {
  * Security Test: API Security
  */
 describe('API Endpoint Security', function () {
-    test('api endpoints require authentication when enabled', function () {
-        config(['fahipay.api.enabled' => true]);
-        
-        // Should require some form of auth (api token, etc)
-        $response = $this->postJson('/api/fahipay/payments', [
-            'amount' => 100,
-        ]);
-        
-        // Should return 422 (validation) not 401 if auth is optional
-        $response->assertStatus(422);
+    test('api routes have the configured middleware applied', function () {
+        $route = collect(app('router')->getRoutes()->getRoutes())
+            ->first(fn ($r) => $r->uri() === 'api/fahipay/payments' && in_array('POST', $r->methods()));
+
+        expect($route)->not->toBeNull();
+        expect($route->middleware())->toContain('api');
     });
 
-    test('webhook rejects requests without signature', function () {
+    test('destructive admin routes are gated by config', function () {
+        $routes = collect(app('router')->getRoutes()->getRoutes());
+
+        $hasDelete = $routes->contains(
+            fn ($r) => $r->uri() === 'api/fahipay/payments/{transactionId}' && in_array('DELETE', $r->methods())
+        );
+
+        // Registered here only because the test harness opts in via
+        // fahipay.api.admin_enabled = true; they are off by default.
+        expect(config('fahipay.api.admin_enabled'))->toBeTrue();
+        expect($hasDelete)->toBeTrue();
+    });
+
+    test('webhook rejects unsigned success requests', function () {
         $response = $this->postJson('/api/fahipay/webhook', [
             'Success' => 'true',
             'ShoppingCartID' => 'TEST-001',
         ]);
-        
-        // Should return 401 without proper signature
-        expect(in_array($response->status(), [401, 422]))->toBeTrue();
+
+        expect($response->status())->toBe(400);
+    });
+
+    test('payment listing clamps per page to a positive value', function () {
+        $response = $this->getJson('/api/fahipay/payments?per_page=0');
+
+        $response->assertOk();
+        expect($response->json('meta.per_page'))->toBe(1);
     });
 });
 
@@ -152,19 +216,21 @@ describe('API Endpoint Security', function () {
 describe('Data Exposure Security', function () {
     test('response does not expose secret key', function () {
         $gateway = app(FahipayGateway::class);
-        
+
         $response = $gateway->getLastResponse();
-        
+
         if ($response) {
             expect(json_encode($response))->not->toContain('test_secret_key_12345');
+        } else {
+            expect(true)->toBeTrue();
         }
     });
 
     test('error responses do not expose sensitive data', function () {
-        config(['fahipay.secret_key' => '']); // Empty secret
-        
+        config(['fahipay.secret_key' => '']);
+
         $gateway = app(FahipayGateway::class);
-        
+
         try {
             $gateway->createPayment('TEST-001', 100.00);
         } catch (\Exception $e) {
@@ -178,15 +244,12 @@ describe('Data Exposure Security', function () {
  */
 describe('Race Condition Security', function () {
     test('handles duplicate payment creation', function () {
+        $gateway = app(FahipayGateway::class);
         $transactionId = 'RACE-TEST-' . time();
-        
-        // First request
-        $payment1 = FahipayGateway::createPayment($transactionId, 100.00);
-        
-        // Second request (same ID)
-        $payment2 = FahipayGateway::createPayment($transactionId, 100.00);
-        
-        // Both should succeed but with same ID - DB should handle uniqueness
+
+        $payment1 = $gateway->createPayment($transactionId, 100.00);
+        $payment2 = $gateway->createPayment($transactionId, 100.00);
+
         expect($payment1->transactionId)->toBe($transactionId);
         expect($payment2->transactionId)->toBe($transactionId);
     });
@@ -196,28 +259,11 @@ describe('Race Condition Security', function () {
  * Security Test: CSRF Protection
  */
 describe('CSRF Protection', function () {
-    test('post routes require csrf token', function () {
-        // Without CSRF token, should fail
+    test('removed initiate route is not exposed', function () {
         $response = $this->post('/fahipay/payment/initiate', [
             'amount' => 100,
         ]);
-        
-        // Should return 419 (CSRF mismatch) or 422 (validation error)
-        expect(in_array($response->status(), [419, 422, 500]))->toBeTrue();
-    });
-});
 
-/**
- * Security Test: HTTPS/TLS
- */
-describe('Transport Security', function () {
-    test('checks for https in production urls', function () {
-        $config = config('fahipay');
-        
-        // In production, URLs should be HTTPS
-        $testModeUrl = $config['test_mode_url'] ?? '';
-        
-        // URLs should start with https:// in production
-        expect($testModeUrl)->toBeString();
+        $response->assertNotFound();
     });
 });

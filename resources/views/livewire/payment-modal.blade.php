@@ -13,10 +13,10 @@
                 </div>
                 
                 <div class="modal-body">
-                    @if($showAmount || $showDescription)
+                    @if($showAmount)
                     <div class="mb-3">
                         <label class="form-label">Amount (MVR)</label>
-                        <input type="number" class="form-control" wire:model="amount" step="0.01" min="0.01">
+                        <div class="form-control bg-light">{{ number_format($amount, 2) }}</div>
                         @error('amount') <span class="text-danger">{{ $message }}</span> @enderror
                     </div>
                     @endif

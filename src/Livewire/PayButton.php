@@ -4,11 +4,17 @@ namespace Fahipay\Gateway\Livewire;
 
 use Fahipay\Gateway\Facades\FahipayGateway;
 use Illuminate\Support\Str;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 class PayButton extends Component
 {
+    // Locked: amount and transaction id are set server-side at mount and must
+    // never be mutable from the client, otherwise a buyer could pay a lower
+    // amount or hijack another transaction by editing the Livewire payload.
+    #[Locked]
     public string $transactionId = '';
+    #[Locked]
     public float $amount = 0;
     public ?string $description = null;
     public ?string $redirectUrl = null;
@@ -53,6 +59,11 @@ class PayButton extends Component
                 $this->errorMessage = 'Redirect URL not allowed';
                 return false;
             }
+
+            if (empty($allowedHosts) && !config('fahipay.allow_unrestricted_callback_urls', false)) {
+                $this->errorMessage = 'Redirect URL not allowed';
+                return false;
+            }
             
             if (!filter_var($this->redirectUrl, FILTER_VALIDATE_URL)) {
                 $this->errorMessage = 'Invalid redirect URL';
@@ -75,11 +86,14 @@ class PayButton extends Component
         $this->errorMessage = null;
 
         try {
+            $gateway = FahipayGateway::getFacadeRoot();
+            $previousReturnUrl = $gateway->getReturnUrl();
+
             if ($this->redirectUrl) {
-                FahipayGateway::setReturnUrl($this->redirectUrl);
+                $gateway->setReturnUrl($this->redirectUrl);
             }
 
-            $payment = FahipayGateway::createPayment(
+            $payment = $gateway->createPayment(
                 $this->transactionId,
                 $this->amount,
                 $this->description
@@ -94,6 +108,10 @@ class PayButton extends Component
         } catch (\Exception $e) {
             $this->errorMessage = $e->getMessage();
         } finally {
+            if (isset($gateway) && $this->redirectUrl) {
+                $gateway->setReturnUrl($previousReturnUrl);
+            }
+
             $this->isLoading = false;
         }
     }

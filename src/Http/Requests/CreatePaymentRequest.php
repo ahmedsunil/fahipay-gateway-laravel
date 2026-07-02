@@ -52,8 +52,8 @@ class CreatePaymentRequest extends FormRequest
     protected function generateTransactionId(): string
     {
         $prefix = config('fahipay.payment.prefix', 'PAY');
-        $length = config('fahipay.payment.unique_id_length', 12);
+        $length = max(1, (int) config('fahipay.payment.unique_id_length', 12));
         
-        return $prefix . '-' . bin2hex(random_bytes($length / 2));
+        return $prefix . '-' . substr(bin2hex(random_bytes((int) ceil($length / 2))), 0, $length);
     }
 }

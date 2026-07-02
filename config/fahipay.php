@@ -18,6 +18,8 @@ return [
     'test_base_url' => env('FAHIPAY_TEST_BASE_URL', 'https://test.fahipay.mv/api/merchants'),
     'base_url' => env('FAHIPAY_BASE_URL', 'https://fahipay.mv/api/merchants'),
     'web_url' => env('FAHIPAY_WEB_URL', 'https://fahipay.mv'),
+    'test_web_url' => env('FAHIPAY_TEST_WEB_URL', 'https://test.fahipay.mv'),
+    'api_key' => env('FAHIPAY_API_KEY', ''),
 
     /*
     |--------------------------------------------------------------------------
@@ -45,6 +47,7 @@ return [
         'prefix' => env('FAHIPAY_TRANSACTION_PREFIX', 'PAY'),
         'unique_id_length' => 12,
         'expire_hours' => 24,
+        'expire_without_verification' => env('FAHIPAY_EXPIRE_WITHOUT_VERIFICATION', false),
     ],
 
     /*
@@ -62,11 +65,23 @@ return [
     |--------------------------------------------------------------------------
     | API Routes
     |--------------------------------------------------------------------------
+    |
+    | These endpoints expose payment CRUD (list/create/show/update/delete).
+    | The middleware below is applied to every API route, so it MUST include
+    | an authentication guard (e.g. 'auth:sanctum') before enabling the API in
+    | production — the default 'api' group does not authenticate requests.
+    |
     */
     'api' => [
         'enabled' => false,
         'prefix' => 'api/fahipay',
-        'middleware' => ['api'],
+        'middleware' => ['api', 'auth'],
+
+        // Administrative endpoints (list all payments, update, delete) are
+        // destructive / data-exposing. They are disabled by default. Enable
+        // them only behind an authenticated middleware stack.
+        'admin_enabled' => env('FAHIPAY_API_ADMIN_ENABLED', false),
+        'admin_middleware' => ['auth:sanctum'],
     ],
 
     /*
@@ -117,4 +132,5 @@ return [
     |--------------------------------------------------------------------------
     */
     'allowed_redirect_hosts' => [],
+    'allow_unrestricted_callback_urls' => env('FAHIPAY_ALLOW_UNRESTRICTED_CALLBACK_URLS', false),
 ];

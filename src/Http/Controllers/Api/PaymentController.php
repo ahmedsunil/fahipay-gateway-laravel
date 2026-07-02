@@ -22,7 +22,7 @@ class PaymentController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $perPage = min($request->integer('per_page', 15), 100);
+        $perPage = max(1, min($request->integer('per_page', 15), 100));
         
         $payments = FahipayPayment::query()
             ->when($request->status, fn($q, $status) => $q->where('status', $status))
@@ -44,18 +44,33 @@ class PaymentController extends Controller
     public function store(CreatePaymentRequest $request): JsonResponse
     {
         $validated = $request->validated();
-        
-        if (!FahipayPayment::where('transaction_id', $validated['transaction_id'])->exists()) {
-            FahipayPayment::createPayment(
-                $validated['transaction_id'],
-                config('fahipay.merchant_id'),
-                $validated['amount'],
-                $validated['description'] ?? null,
-                $validated['metadata'] ?? null
-            );
+
+        if (FahipayPayment::where('transaction_id', $validated['transaction_id'])->exists()) {
+            return response()->json([
+                'error' => 'Payment transaction already exists',
+            ], 409);
         }
 
         $payment = $this->createPayment->execute($validated);
+
+        if (!$payment->paymentUrl) {
+            return response()->json([
+                'error' => $payment->rawResponse['message'] ?? $payment->rawResponse['msg'] ?? 'Payment creation failed',
+                'data' => [
+                    'transaction_id' => $payment->transactionId,
+                    'amount' => $payment->amount,
+                    'status' => $payment->status->value,
+                ],
+            ], 422);
+        }
+
+        FahipayPayment::createPayment(
+            $validated['transaction_id'],
+            (string) config('fahipay.shop_id'),
+            $validated['amount'],
+            $validated['description'] ?? null,
+            $validated['metadata'] ?? null
+        );
 
         return response()->json([
             'data' => [
@@ -70,9 +85,11 @@ class PaymentController extends Controller
 
     public function show(Request $request, string $transactionId): JsonResponse
     {
-        $request->validate([
-            'transaction_id' => 'sometimes|string|max:100|regex:/^[A-Za-z0-9\-_]+$/',
-        ]);
+        if (!$this->isValidTransactionId($transactionId)) {
+            return response()->json([
+                'error' => 'Invalid transaction ID format',
+            ], 400);
+        }
         
         $payment = FahipayPayment::where('transaction_id', $transactionId)->first();
 
@@ -89,7 +106,7 @@ class PaymentController extends Controller
 
     public function verify(string $transactionId): JsonResponse
     {
-        if (!preg_match('/^[A-Za-z0-9\-_]+$/', $transactionId)) {
+        if (!$this->isValidTransactionId($transactionId)) {
             return response()->json([
                 'error' => 'Invalid transaction ID format',
             ], 400);
@@ -110,6 +127,12 @@ class PaymentController extends Controller
 
     public function update(Request $request, string $transactionId): JsonResponse
     {
+        if (!$this->isValidTransactionId($transactionId)) {
+            return response()->json([
+                'error' => 'Invalid transaction ID format',
+            ], 400);
+        }
+
         $request->validate([
             'description' => 'sometimes|string|max:255',
             'metadata' => 'sometimes|array',
@@ -133,6 +156,12 @@ class PaymentController extends Controller
 
     public function destroy(string $transactionId): JsonResponse
     {
+        if (!$this->isValidTransactionId($transactionId)) {
+            return response()->json([
+                'error' => 'Invalid transaction ID format',
+            ], 400);
+        }
+
         $payment = FahipayPayment::where('transaction_id', $transactionId)->first();
 
         if (!$payment) {
@@ -146,5 +175,10 @@ class PaymentController extends Controller
         return response()->json([
             'message' => 'Payment deleted successfully',
         ]);
+    }
+
+    protected function isValidTransactionId(string $transactionId): bool
+    {
+        return (bool) preg_match('/^[A-Za-z0-9\-_]{1,100}$/', $transactionId);
     }
 }

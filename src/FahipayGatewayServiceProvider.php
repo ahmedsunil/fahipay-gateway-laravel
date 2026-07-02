@@ -3,7 +3,8 @@
 namespace Fahipay\Gateway;
 
 use Fahipay\Gateway\Contracts\GatewayInterface;
-use Fahipay\Gateway\Contracts\PaymentHandlerInterface;
+use Fahipay\Gateway\Models\FahipayPayment;
+use Fahipay\Gateway\Observers\FahipayPaymentObserver;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
@@ -12,10 +13,10 @@ class FahipayGatewayServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        $this->mergeConfigFrom(__DIR__ . '/../config/fahipay.php', 'fahipay');
+        $this->mergeConfigFrom(__DIR__.'/../config/fahipay.php', 'fahipay');
 
         $this->app->singleton(FahipayGateway::class, function ($app) {
-            return new FahipayGateway();
+            return new FahipayGateway;
         });
 
         $this->app->singleton(GatewayInterface::class, FahipayGateway::class);
@@ -36,12 +37,25 @@ class FahipayGatewayServiceProvider extends ServiceProvider
 
         $this->registerRoutes();
         $this->registerEvents();
+        $this->registerObservers();
+        $this->registerViews();
         $this->registerTranslations();
+        $this->registerLivewireComponents();
+    }
+
+    protected function registerLivewireComponents(): void
+    {
+        if (! class_exists(\Livewire\Livewire::class)) {
+            return;
+        }
+
+        \Livewire\Livewire::component('fahipay-pay-button', Livewire\PayButton::class);
+        \Livewire\Livewire::component('fahipay-payment-modal', Livewire\PaymentModal::class);
     }
 
     protected function registerHelpers(): void
     {
-        $helpers = __DIR__ . '/../src/Support/helpers.php';
+        $helpers = __DIR__.'/../src/Support/helpers.php';
         if (file_exists($helpers)) {
             require_once $helpers;
         }
@@ -50,7 +64,7 @@ class FahipayGatewayServiceProvider extends ServiceProvider
     protected function publishConfig(): void
     {
         $this->publishes([
-            __DIR__ . '/../config/fahipay.php' => config_path('fahipay.php'),
+            __DIR__.'/../config/fahipay.php' => config_path('fahipay.php'),
         ], 'fahipay-config');
     }
 
@@ -61,14 +75,14 @@ class FahipayGatewayServiceProvider extends ServiceProvider
         }
 
         $this->publishes([
-            __DIR__ . '/../database/migrations' => database_path('migrations'),
+            __DIR__.'/../database/migrations' => database_path('migrations'),
         ], 'fahipay-migrations');
     }
 
     protected function publishViews(): void
     {
         $this->publishes([
-            __DIR__ . '/../resources/views' => resource_path('views/vendor/fahipay'),
+            __DIR__.'/../resources/views' => resource_path('views/vendor/fahipay'),
         ], 'fahipay-views');
     }
 
@@ -88,15 +102,16 @@ class FahipayGatewayServiceProvider extends ServiceProvider
                 'prefix' => $this->app['config']->get('fahipay.routes.prefix', 'fahipay'),
                 'middleware' => $this->app['config']->get('fahipay.routes.middleware', ['web']),
             ], function () {
-                require __DIR__ . '/../routes/web.php';
+                require __DIR__.'/../routes/web.php';
             });
+        }
 
-            if ($this->app['config']->get('fahipay.api.enabled', false)) {
-                Route::prefix($this->app['config']->get('fahipay.api.prefix', 'api/fahipay'))
-                    ->group(function () {
-                        require __DIR__ . '/../routes/api.php';
-                    });
-            }
+        if ($this->app['config']->get('fahipay.api.enabled', false)) {
+            Route::prefix($this->app['config']->get('fahipay.api.prefix', 'api/fahipay'))
+                ->middleware($this->app['config']->get('fahipay.api.middleware', ['api', 'auth']))
+                ->group(function () {
+                    require __DIR__.'/../routes/api.php';
+                });
         }
     }
 
@@ -113,6 +128,16 @@ class FahipayGatewayServiceProvider extends ServiceProvider
 
     protected function registerTranslations(): void
     {
-        $this->loadTranslationsFrom(__DIR__ . '/../lang', 'fahipay');
+        $this->loadTranslationsFrom(__DIR__.'/../lang', 'fahipay');
+    }
+
+    protected function registerViews(): void
+    {
+        $this->loadViewsFrom(__DIR__.'/../resources/views', 'fahipay');
+    }
+
+    protected function registerObservers(): void
+    {
+        FahipayPayment::observe(FahipayPaymentObserver::class);
     }
 }
