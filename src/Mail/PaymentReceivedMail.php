@@ -20,7 +20,7 @@ class PaymentReceivedMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Payment Confirmation - ' . $this->payment->transaction_id,
+            subject: 'Payment Confirmation - '.$this->payment->transaction_id,
         );
     }
 

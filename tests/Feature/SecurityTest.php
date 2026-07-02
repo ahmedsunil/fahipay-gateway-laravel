@@ -1,8 +1,10 @@
 <?php
 
-use Fahipay\Gateway\FahipayGateway;
 use Fahipay\Gateway\Actions\CreatePaymentAction;
+use Fahipay\Gateway\Data\PaymentData;
+use Fahipay\Gateway\Enums\PaymentStatus;
 use Fahipay\Gateway\Exceptions\FahipayException;
+use Fahipay\Gateway\FahipayGateway;
 use Fahipay\Gateway\Http\Requests\CreatePaymentRequest;
 
 beforeEach(function () {
@@ -78,7 +80,7 @@ describe('Input Validation Security', function () {
         $gateway = app(FahipayGateway::class);
 
         expect(fn () => $gateway->createPayment('TEST-001', -100.00))
-            ->toThrow(\Fahipay\Gateway\Exceptions\FahipayException::class, 'Amount must be greater than zero');
+            ->toThrow(FahipayException::class, 'Amount must be greater than zero');
     });
 
     test('rejects invalid payment url inputs before signing', function () {
@@ -91,7 +93,7 @@ describe('Input Validation Security', function () {
             ->toThrow(FahipayException::class, 'Amount must be greater than zero');
 
         config(['fahipay.secret_key' => '']);
-        $gateway = new FahipayGateway();
+        $gateway = new FahipayGateway;
 
         expect(fn () => $gateway->getLink('TEST-001', 100.00))
             ->toThrow(FahipayException::class, 'Shop ID and Secret Key are required');
@@ -110,17 +112,18 @@ describe('Input Validation Security', function () {
     test('custom callback urls require an allowed host unless explicitly unrestricted', function () {
         config(['fahipay.allowed_redirect_hosts' => ['merchant.example']]);
 
-        $gateway = new class extends FahipayGateway {
+        $gateway = new class extends FahipayGateway
+        {
             public ?string $capturedReturnUrl = null;
 
-            public function createPayment(string $transactionId, float $amount, ?string $description = null, ?array $metadata = []): \Fahipay\Gateway\Data\PaymentData
+            public function createPayment(string $transactionId, float $amount, ?string $description = null, ?array $metadata = []): PaymentData
             {
                 $this->capturedReturnUrl = $this->getReturnUrl();
 
-                return new \Fahipay\Gateway\Data\PaymentData(
+                return new PaymentData(
                     transactionId: $transactionId,
                     amount: $amount,
-                    status: \Fahipay\Gateway\Enums\PaymentStatus::PENDING,
+                    status: PaymentStatus::PENDING,
                     paymentUrl: 'https://test.fahipay.mv/payment/session-123'
                 );
             }
@@ -157,7 +160,7 @@ describe('Input Validation Security', function () {
     test('generated request transaction ids support odd configured lengths', function () {
         config(['fahipay.payment.unique_id_length' => 11]);
 
-        $request = new CreatePaymentRequest();
+        $request = new CreatePaymentRequest;
         $method = new ReflectionMethod(CreatePaymentRequest::class, 'generateTransactionId');
         $method->setAccessible(true);
 
@@ -191,6 +194,18 @@ describe('API Endpoint Security', function () {
         // fahipay.api.admin_enabled = true; they are off by default.
         expect(config('fahipay.api.admin_enabled'))->toBeTrue();
         expect($hasDelete)->toBeTrue();
+    });
+
+    test('webhook route does not require app authentication', function () {
+        // FahiPay's servers cannot authenticate against the app; the callback
+        // signature is the authentication. The webhook must not inherit the
+        // authenticated API middleware stack.
+        $route = collect(app('router')->getRoutes()->getRoutes())
+            ->first(fn ($r) => $r->getName() === 'fahipay.api.webhook');
+
+        expect($route)->not->toBeNull();
+        expect($route->middleware())->not->toContain('auth')
+            ->and($route->middleware())->not->toContain('auth:sanctum');
     });
 
     test('webhook rejects unsigned success requests', function () {
@@ -233,7 +248,7 @@ describe('Data Exposure Security', function () {
 
         try {
             $gateway->createPayment('TEST-001', 100.00);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             expect($e->getMessage())->not->toContain('secret');
         }
     });
@@ -245,7 +260,7 @@ describe('Data Exposure Security', function () {
 describe('Race Condition Security', function () {
     test('handles duplicate payment creation', function () {
         $gateway = app(FahipayGateway::class);
-        $transactionId = 'RACE-TEST-' . time();
+        $transactionId = 'RACE-TEST-'.time();
 
         $payment1 = $gateway->createPayment($transactionId, 100.00);
         $payment2 = $gateway->createPayment($transactionId, 100.00);

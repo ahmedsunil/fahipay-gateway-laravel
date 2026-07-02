@@ -7,6 +7,10 @@ use Spatie\LaravelData\Data;
 
 class PaymentData extends Data
 {
+    /**
+     * @param  array<string, mixed>|null  $metadata
+     * @param  array<string, mixed>  $rawResponse
+     */
     public function __construct(
         public string $transactionId,
         public float $amount,

@@ -10,6 +10,9 @@ class PaymentInitiatedEvent
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
+    /**
+     * @param  array<string, mixed>  $response
+     */
     public function __construct(
         public string $transactionId,
         public float $amount,

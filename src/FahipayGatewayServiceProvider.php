@@ -107,11 +107,20 @@ class FahipayGatewayServiceProvider extends ServiceProvider
         }
 
         if ($this->app['config']->get('fahipay.api.enabled', false)) {
-            Route::prefix($this->app['config']->get('fahipay.api.prefix', 'api/fahipay'))
+            $apiPrefix = $this->app['config']->get('fahipay.api.prefix', 'api/fahipay');
+
+            Route::prefix($apiPrefix)
                 ->middleware($this->app['config']->get('fahipay.api.middleware', ['api', 'auth']))
                 ->group(function () {
                     require __DIR__.'/../routes/api.php';
                 });
+
+            // Registered outside the authenticated API group: FahiPay's servers
+            // call this endpoint and authenticate via the callback signature.
+            Route::prefix($apiPrefix)
+                ->middleware($this->app['config']->get('fahipay.api.webhook_middleware', ['api', 'throttle:60,1']))
+                ->post('/webhook', [Http\Controllers\Api\WebhookController::class, 'handle'])
+                ->name('fahipay.api.webhook');
         }
     }
 

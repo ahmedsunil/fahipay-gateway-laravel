@@ -8,8 +8,8 @@ use Fahipay\Gateway\FahipayGateway as Gateway;
 use Illuminate\Support\Facades\Facade;
 
 /**
- * @method static PaymentData createPayment(string $transactionId, float $amount, ?string $description = null, ?array $metadata = [])
- * @method static PaymentData create(array $config)
+ * @method static PaymentData createPayment(string $transactionId, float $amount, ?string $description = null, array<string, mixed>|null $metadata = [])
+ * @method static PaymentData create(array<string, mixed> $config)
  * @method static string getPaymentUrl(string $transactionId, float $amount)
  * @method static TransactionData|null getTransaction(string $transactionId)
  * @method static TransactionData|null getPayment(string $transactionId)
@@ -32,9 +32,9 @@ use Illuminate\Support\Facades\Facade;
  * @method static bool isTestMode()
  * @method static bool isConfigured()
  * @method static ?string getLastTransactionId()
- * @method static ?array getLastResponse()
- * 
- * @see \Fahipay\Gateway\FahipayGateway
+ * @method static array<string, mixed>|null getLastResponse()
+ *
+ * @see Gateway
  */
 class FahipayGateway extends Facade
 {

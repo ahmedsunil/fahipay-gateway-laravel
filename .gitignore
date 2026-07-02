@@ -3,6 +3,7 @@
 composer.lock
 package-lock.json
 /.phpunit.cache/
+/.phpstan.cache/
 .phpunit.result.cache
 /coverage/
 .DS_Store

@@ -6,6 +6,8 @@ use Fahipay\Gateway\Events\PaymentCancelledEvent;
 use Fahipay\Gateway\Events\PaymentFailedEvent;
 use Fahipay\Gateway\FahipayGateway;
 use Fahipay\Gateway\Models\FahipayPayment;
+use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Log;
@@ -16,7 +18,7 @@ class WebhookController extends Controller
         protected FahipayGateway $gateway
     ) {}
 
-    public function handle(Request $request)
+    public function handle(Request $request): JsonResponse
     {
         try {
             $transaction = $this->gateway->handleCallback($request);
@@ -35,12 +37,12 @@ class WebhookController extends Controller
         }
     }
 
-    public function callback(Request $request)
+    public function callback(Request $request): JsonResponse
     {
         return $this->handle($request);
     }
 
-    public function success(Request $request)
+    public function success(Request $request): View
     {
         if (! $this->gateway->validateCallback($request)) {
             return view('fahipay::error', [
@@ -65,7 +67,7 @@ class WebhookController extends Controller
         ]);
     }
 
-    public function cancel(Request $request)
+    public function cancel(Request $request): View
     {
         if (! $this->gateway->validateDisplayCallback($request)) {
             return view('fahipay::error', [
@@ -90,7 +92,7 @@ class WebhookController extends Controller
         ]);
     }
 
-    public function error(Request $request)
+    public function error(Request $request): View
     {
         if (! $this->gateway->validateDisplayCallback($request)) {
             return view('fahipay::error', [

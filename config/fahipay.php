@@ -1,5 +1,10 @@
 <?php
 
+use Fahipay\Gateway\Events\PaymentCancelledEvent;
+use Fahipay\Gateway\Events\PaymentCompletedEvent;
+use Fahipay\Gateway\Events\PaymentFailedEvent;
+use Fahipay\Gateway\Events\PaymentInitiatedEvent;
+
 return [
     /*
     |--------------------------------------------------------------------------
@@ -58,7 +63,7 @@ return [
     'routes' => [
         'enabled' => true,
         'prefix' => 'fahipay',
-        'middleware' => ['web'],
+        'middleware' => ['web', 'throttle:60,1'],
     ],
 
     /*
@@ -76,6 +81,11 @@ return [
         'enabled' => false,
         'prefix' => 'api/fahipay',
         'middleware' => ['api', 'auth'],
+
+        // The webhook endpoint is called by FahiPay's servers, which cannot
+        // authenticate against your app — the callback signature is the
+        // authentication. Keep this stack unauthenticated but rate limited.
+        'webhook_middleware' => ['api', 'throttle:60,1'],
 
         // Administrative endpoints (list all payments, update, delete) are
         // destructive / data-exposing. They are disabled by default. Enable
@@ -100,10 +110,10 @@ return [
     |--------------------------------------------------------------------------
     */
     'events' => [
-        \Fahipay\Gateway\Events\PaymentInitiatedEvent::class => [],
-        \Fahipay\Gateway\Events\PaymentCompletedEvent::class => [],
-        \Fahipay\Gateway\Events\PaymentFailedEvent::class => [],
-        \Fahipay\Gateway\Events\PaymentCancelledEvent::class => [],
+        PaymentInitiatedEvent::class => [],
+        PaymentCompletedEvent::class => [],
+        PaymentFailedEvent::class => [],
+        PaymentCancelledEvent::class => [],
     ],
 
     /*

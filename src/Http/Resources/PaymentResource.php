@@ -2,11 +2,18 @@
 
 namespace Fahipay\Gateway\Http\Resources;
 
+use Fahipay\Gateway\Models\FahipayPayment;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
+/**
+ * @mixin FahipayPayment
+ */
 class PaymentResource extends JsonResource
 {
+    /**
+     * @return array<string, mixed>
+     */
     public function toArray(Request $request): array
     {
         return [

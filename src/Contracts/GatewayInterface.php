@@ -10,6 +10,8 @@ interface GatewayInterface
 {
     /**
      * Create a new payment transaction
+     *
+     * @param  array<string, mixed>|null  $metadata
      */
     public function createPayment(string $transactionId, float $amount, ?string $description = null, ?array $metadata = []): PaymentData;
 

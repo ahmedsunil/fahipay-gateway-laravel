@@ -2,7 +2,6 @@
 
 namespace Fahipay\Gateway\Http\Controllers\Api;
 
-use Illuminate\Routing\Controller;
 use Fahipay\Gateway\Actions\CreatePaymentAction;
 use Fahipay\Gateway\Actions\VerifyPaymentAction;
 use Fahipay\Gateway\Http\Requests\CreatePaymentRequest;
@@ -11,7 +10,7 @@ use Fahipay\Gateway\Http\Resources\TransactionResource;
 use Fahipay\Gateway\Models\FahipayPayment;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
+use Illuminate\Routing\Controller;
 
 class PaymentController extends Controller
 {
@@ -23,10 +22,10 @@ class PaymentController extends Controller
     public function index(Request $request): JsonResponse
     {
         $perPage = max(1, min($request->integer('per_page', 15), 100));
-        
+
         $payments = FahipayPayment::query()
-            ->when($request->status, fn($q, $status) => $q->where('status', $status))
-            ->when($request->merchant_id, fn($q, $id) => $q->where('merchant_id', $id))
+            ->when($request->status, fn ($q, $status) => $q->where('status', $status))
+            ->when($request->merchant_id, fn ($q, $id) => $q->where('merchant_id', $id))
             ->orderByDesc('created_at')
             ->paginate($perPage);
 
@@ -53,7 +52,7 @@ class PaymentController extends Controller
 
         $payment = $this->createPayment->execute($validated);
 
-        if (!$payment->paymentUrl) {
+        if (! $payment->paymentUrl) {
             return response()->json([
                 'error' => $payment->rawResponse['message'] ?? $payment->rawResponse['msg'] ?? 'Payment creation failed',
                 'data' => [
@@ -85,15 +84,15 @@ class PaymentController extends Controller
 
     public function show(Request $request, string $transactionId): JsonResponse
     {
-        if (!$this->isValidTransactionId($transactionId)) {
+        if (! $this->isValidTransactionId($transactionId)) {
             return response()->json([
                 'error' => 'Invalid transaction ID format',
             ], 400);
         }
-        
+
         $payment = FahipayPayment::where('transaction_id', $transactionId)->first();
 
-        if (!$payment) {
+        if (! $payment) {
             return response()->json([
                 'error' => 'Payment not found',
             ], 404);
@@ -106,12 +105,12 @@ class PaymentController extends Controller
 
     public function verify(string $transactionId): JsonResponse
     {
-        if (!$this->isValidTransactionId($transactionId)) {
+        if (! $this->isValidTransactionId($transactionId)) {
             return response()->json([
                 'error' => 'Invalid transaction ID format',
             ], 400);
         }
-        
+
         try {
             $transaction = $this->verifyPayment->execute($transactionId);
 
@@ -127,7 +126,7 @@ class PaymentController extends Controller
 
     public function update(Request $request, string $transactionId): JsonResponse
     {
-        if (!$this->isValidTransactionId($transactionId)) {
+        if (! $this->isValidTransactionId($transactionId)) {
             return response()->json([
                 'error' => 'Invalid transaction ID format',
             ], 400);
@@ -137,10 +136,10 @@ class PaymentController extends Controller
             'description' => 'sometimes|string|max:255',
             'metadata' => 'sometimes|array',
         ]);
-        
+
         $payment = FahipayPayment::where('transaction_id', $transactionId)->first();
 
-        if (!$payment) {
+        if (! $payment) {
             return response()->json([
                 'error' => 'Payment not found',
             ], 404);
@@ -156,7 +155,7 @@ class PaymentController extends Controller
 
     public function destroy(string $transactionId): JsonResponse
     {
-        if (!$this->isValidTransactionId($transactionId)) {
+        if (! $this->isValidTransactionId($transactionId)) {
             return response()->json([
                 'error' => 'Invalid transaction ID format',
             ], 400);
@@ -164,7 +163,7 @@ class PaymentController extends Controller
 
         $payment = FahipayPayment::where('transaction_id', $transactionId)->first();
 
-        if (!$payment) {
+        if (! $payment) {
             return response()->json([
                 'error' => 'Payment not found',
             ], 404);

@@ -13,22 +13,25 @@ class HandleFailedPaymentAction
 
         if ($payment) {
             $payment->markAsFailed($reason);
-            Log::info("FahiPay: Payment marked as failed in database", [
+            Log::info('FahiPay: Payment marked as failed in database', [
                 'transaction_id' => $transactionId,
-                'reason' => $reason
+                'reason' => $reason,
             ]);
         }
 
-        Log::warning("FahiPay: Payment failed", [
+        Log::warning('FahiPay: Payment failed', [
             'transaction_id' => $transactionId,
-            'reason' => $reason
+            'reason' => $reason,
         ]);
     }
 
+    /**
+     * @param  array<int, string>  $transactionIds
+     */
     public function handleMultiple(array $transactionIds): int
     {
         $count = 0;
-        
+
         foreach ($transactionIds as $transactionId) {
             $this->execute($transactionId);
             $count++;

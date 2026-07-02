@@ -1,7 +1,7 @@
 <?php
 
-use Fahipay\Gateway\FahipayGateway as Gateway;
 use Fahipay\Gateway\Contracts\GatewayInterface;
+use Fahipay\Gateway\FahipayGateway as Gateway;
 
 beforeEach(function () {
     config(['fahipay.shop_id' => 'test_shop']);
@@ -45,7 +45,7 @@ test('gateway can toggle test mode', function () {
     config(['fahipay.web_url' => 'https://fahipay.mv']);
     config(['fahipay.test_web_url' => 'https://test.fahipay.mv']);
 
-    $gateway = new Gateway();
+    $gateway = new Gateway;
 
     expect($gateway->isTestMode())->toBeTrue();
     expect($gateway->getWebUrl())->toBe('https://test.fahipay.mv');

@@ -1,10 +1,11 @@
 <?php
 
+use Fahipay\Gateway\Enums\PaymentStatus;
+use Fahipay\Gateway\Events\PaymentCompletedEvent;
+use Fahipay\Gateway\Exceptions\FahipayException;
 use Fahipay\Gateway\Facades\FahipayGateway;
 use Fahipay\Gateway\FahipayGateway as Gateway;
 use Fahipay\Gateway\Models\FahipayPayment;
-use Fahipay\Gateway\Enums\PaymentStatus;
-use Fahipay\Gateway\Events\PaymentCompletedEvent;
 use Illuminate\Support\Facades\Event;
 
 beforeEach(function () {
@@ -113,7 +114,8 @@ test('payment status enum works correctly', function () {
 });
 
 test('can get payment url', function () {
-    $gateway = new class extends Gateway {
+    $gateway = new class extends Gateway
+    {
         protected function requestPaymentRedirect(string $webUrl, array $params, string $cookiePath): ?string
         {
             return 'https://test.fahipay.mv/payment/session-123';
@@ -127,7 +129,8 @@ test('can get payment url', function () {
 });
 
 test('payment url fails when fahipay does not return a valid redirect', function () {
-    $gateway = new class extends Gateway {
+    $gateway = new class extends Gateway
+    {
         protected function requestPaymentRedirect(string $webUrl, array $params, string $cookiePath): ?string
         {
             return null;
@@ -135,5 +138,5 @@ test('payment url fails when fahipay does not return a valid redirect', function
     };
 
     expect(fn () => $gateway->getPaymentUrl('TEST-001', 100.00))
-        ->toThrow(\Fahipay\Gateway\Exceptions\FahipayException::class, 'Unable to create FahiPay payment redirect');
+        ->toThrow(FahipayException::class, 'Unable to create FahiPay payment redirect');
 });

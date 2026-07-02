@@ -12,7 +12,7 @@ class VerifyPaymentAction
     {
         $transaction = FahipayGateway::getTransaction($transactionId);
 
-        if (!$transaction) {
+        if (! $transaction) {
             throw new FahipayException("Transaction not found: {$transactionId}");
         }
 
@@ -22,18 +22,21 @@ class VerifyPaymentAction
     public function isSuccessful(string $transactionId): bool
     {
         $transaction = $this->execute($transactionId);
+
         return $transaction->isSuccessful();
     }
 
     public function isPending(string $transactionId): bool
     {
         $transaction = $this->execute($transactionId);
+
         return $transaction->isPending();
     }
 
     public function isFailed(string $transactionId): bool
     {
         $transaction = $this->execute($transactionId);
+
         return $transaction->isFailed();
     }
 }

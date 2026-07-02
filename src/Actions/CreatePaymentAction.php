@@ -9,6 +9,9 @@ use Illuminate\Support\Str;
 
 class CreatePaymentAction
 {
+    /**
+     * @param  array<string, mixed>  $data
+     */
     public function execute(array $data): PaymentData
     {
         $transactionId = $data['transaction_id'] ?? $this->generateTransactionId();
@@ -52,7 +55,7 @@ class CreatePaymentAction
      */
     protected function assertAllowedCallbackUrl(string $url): void
     {
-        if (!filter_var($url, FILTER_VALIDATE_URL)) {
+        if (! filter_var($url, FILTER_VALIDATE_URL)) {
             throw new FahipayException('Invalid callback URL');
         }
 
@@ -68,7 +71,7 @@ class CreatePaymentAction
 
         $host = parse_url($url, PHP_URL_HOST);
 
-        if (!in_array($host, $allowedHosts, true)) {
+        if (! in_array($host, $allowedHosts, true)) {
             throw new FahipayException('Callback URL host is not allowed');
         }
     }
@@ -78,6 +81,6 @@ class CreatePaymentAction
         $prefix = config('fahipay.payment.prefix', 'PAY');
         $length = config('fahipay.payment.unique_id_length', 12);
 
-        return $prefix . '-' . Str::random($length);
+        return $prefix.'-'.Str::random($length);
     }
 }

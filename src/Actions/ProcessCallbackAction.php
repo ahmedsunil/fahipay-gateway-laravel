@@ -20,7 +20,7 @@ class ProcessCallbackAction
 
     public function handleCancellation(Request $request): TransactionData
     {
-        if (!FahipayGateway::validateStateChangingCallback($request)) {
+        if (! FahipayGateway::validateStateChangingCallback($request)) {
             Log::warning('FahiPay: Invalid cancellation signature', [
                 'ip' => $request->ip(),
                 'user_agent' => $request->userAgent(),
@@ -37,7 +37,7 @@ class ProcessCallbackAction
             event(new PaymentCancelledEvent($transactionId));
         }
 
-        Log::info("FahiPay: Payment cancelled", ['transaction_id' => $transactionId]);
+        Log::info('FahiPay: Payment cancelled', ['transaction_id' => $transactionId]);
 
         return new TransactionData(
             transactionId: $transactionId,

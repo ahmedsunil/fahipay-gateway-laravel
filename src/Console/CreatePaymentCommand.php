@@ -22,12 +22,13 @@ class CreatePaymentCommand extends Command
         $payment = FahipayGateway::createPayment($transactionId, $amount, $description);
 
         if ($payment->paymentUrl) {
-            $this->info("Payment created successfully!");
+            $this->info('Payment created successfully!');
             $this->line("Payment URL: {$payment->paymentUrl}");
             $this->line("Status: {$payment->status->value}");
         } else {
-            $this->error("Failed to create payment");
+            $this->error('Failed to create payment');
             $this->line(json_encode($payment->rawResponse, JSON_PRETTY_PRINT));
+
             return self::FAILURE;
         }
 

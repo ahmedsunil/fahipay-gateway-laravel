@@ -1,19 +1,19 @@
 <?php
 
+use Fahipay\Gateway\FahipayGatewayServiceProvider;
 use Orchestra\Testbench\TestCase;
-use Fahipay\Gateway\FahipayGateway;
 
 abstract class TestCaseBase extends TestCase
 {
     protected function getPackageProviders($app)
     {
-        return [\Fahipay\Gateway\FahipayGatewayServiceProvider::class];
+        return [FahipayGatewayServiceProvider::class];
     }
 
     protected function getPackageAliases($app)
     {
         return [
-            'FahipayGateway' => \Fahipay\Gateway\Facades\FahipayGateway::class,
+            'FahipayGateway' => Fahipay\Gateway\Facades\FahipayGateway::class,
         ];
     }
 
@@ -21,12 +21,12 @@ abstract class TestCaseBase extends TestCase
     {
         parent::setUp();
 
-        $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
+        $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
     }
 
     protected function defineEnvironment($app)
     {
-        $app['config']->set('app.key', 'base64:' . base64_encode(random_bytes(32)));
+        $app['config']->set('app.key', 'base64:'.base64_encode(random_bytes(32)));
 
         $app['config']->set('database.default', 'testing');
         $app['config']->set('database.connections.testing', [
@@ -60,6 +60,7 @@ abstract class TestCaseBase extends TestCase
                 'enabled' => true,
                 'prefix' => 'api/fahipay',
                 'middleware' => ['api'],
+                'webhook_middleware' => ['api'],
                 // Admin routes default to OFF in production; enabled here (with
                 // no extra middleware) so the destructive endpoints can be
                 // exercised by the test suite.

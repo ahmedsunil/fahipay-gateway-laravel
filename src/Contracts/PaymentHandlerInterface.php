@@ -28,11 +28,15 @@ interface PaymentHandlerInterface
 
     /**
      * Determine payment status from gateway response
+     *
+     * @param  array<string, mixed>  $response
      */
     public function determineStatus(array $response): PaymentStatus;
 
     /**
      * Process payment completion
+     *
+     * @param  array<string, mixed>  $data
      */
     public function process(string $transactionId, array $data): void;
 }

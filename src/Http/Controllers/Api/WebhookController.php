@@ -2,12 +2,12 @@
 
 namespace Fahipay\Gateway\Http\Controllers\Api;
 
-use Illuminate\Routing\Controller;
 use Fahipay\Gateway\Actions\ProcessCallbackAction;
 use Fahipay\Gateway\Facades\FahipayGateway;
 use Fahipay\Gateway\Models\FahipayPayment;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Log;
 
 class WebhookController extends Controller
@@ -23,7 +23,7 @@ class WebhookController extends Controller
             $success = in_array($request->get('Success'), ['true', '1'], true);
             $approvalCode = $request->get('ApprovalCode');
 
-            if (!FahipayGateway::validateStateChangingCallback($request)) {
+            if (! FahipayGateway::validateStateChangingCallback($request)) {
                 Log::warning('FahiPay webhook: Invalid or unsigned state-changing callback', [
                     'transaction_id' => $transactionId,
                 ]);
@@ -35,11 +35,11 @@ class WebhookController extends Controller
 
             $payment = FahipayPayment::where('transaction_id', $transactionId)->first();
 
-            if (!$payment) {
+            if (! $payment) {
                 Log::warning('FahiPay webhook: Transaction not found', [
                     'transaction_id' => $transactionId,
                 ]);
-                
+
                 return response()->json([
                     'error' => 'Transaction not found',
                 ], 404);
@@ -65,7 +65,7 @@ class WebhookController extends Controller
                 'transaction_id' => $transactionId,
             ]);
         } catch (\Exception $e) {
-            Log::error('FahiPay webhook error: ' . $e->getMessage(), [
+            Log::error('FahiPay webhook error: '.$e->getMessage(), [
                 'trace' => $e->getTraceAsString(),
             ]);
 

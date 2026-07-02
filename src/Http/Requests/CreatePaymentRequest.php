@@ -12,6 +12,9 @@ class CreatePaymentRequest extends FormRequest
         return true;
     }
 
+    /**
+     * @return array<string, array<int, mixed>>
+     */
     public function rules(): array
     {
         return [
@@ -34,18 +37,21 @@ class CreatePaymentRequest extends FormRequest
         ];
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public function validated($key = null, $default = null): array
     {
         $data = parent::validated($key, $default);
-        
-        if (!isset($data['transaction_id'])) {
+
+        if (! isset($data['transaction_id'])) {
             $data['transaction_id'] = $this->generateTransactionId();
         }
-        
-        if (!isset($data['currency'])) {
+
+        if (! isset($data['currency'])) {
             $data['currency'] = 'MVR';
         }
-        
+
         return $data;
     }
 
@@ -53,7 +59,7 @@ class CreatePaymentRequest extends FormRequest
     {
         $prefix = config('fahipay.payment.prefix', 'PAY');
         $length = max(1, (int) config('fahipay.payment.unique_id_length', 12));
-        
-        return $prefix . '-' . substr(bin2hex(random_bytes((int) ceil($length / 2))), 0, $length);
+
+        return $prefix.'-'.substr(bin2hex(random_bytes((int) ceil($length / 2))), 0, $length);
     }
 }

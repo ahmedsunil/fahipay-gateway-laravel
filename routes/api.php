@@ -1,7 +1,6 @@
 <?php
 
 use Fahipay\Gateway\Http\Controllers\Api\PaymentController;
-use Fahipay\Gateway\Http\Controllers\Api\WebhookController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('payments')->group(function () {
@@ -21,6 +20,3 @@ Route::prefix('payments')->group(function () {
         });
     }
 });
-
-Route::post('/webhook', [WebhookController::class, 'handle'])
-    ->name('fahipay.api.webhook');

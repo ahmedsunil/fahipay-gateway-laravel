@@ -1,9 +1,10 @@
 <?php
 
-use Fahipay\Gateway\FahipayGateway;
-use Illuminate\Http\Request;
-use Fahipay\Gateway\Models\FahipayPayment;
 use Fahipay\Gateway\Enums\PaymentStatus;
+use Fahipay\Gateway\Exceptions\FahipayException;
+use Fahipay\Gateway\FahipayGateway;
+use Fahipay\Gateway\Models\FahipayPayment;
+use Illuminate\Http\Request;
 
 beforeEach(function () {
     config(['fahipay.shop_id' => 'test_shop']);
@@ -19,7 +20,7 @@ function callbackRequest(FahipayGateway $gateway, array $overrides = []): Reques
         'ApprovalCode' => 'APPROVAL123',
     ], $overrides);
 
-    if (($params['Success'] === 'true' || $params['Success'] === '1') && !array_key_exists('Signature', $overrides)) {
+    if (($params['Success'] === 'true' || $params['Success'] === '1') && ! array_key_exists('Signature', $overrides)) {
         $params['Signature'] = $gateway->generateCallbackSignature(
             $params['Success'],
             $params['ShoppingCartID'],
@@ -86,7 +87,7 @@ test('default success route updates package payment record', function () {
 
     $request = callbackRequest($gateway, ['ShoppingCartID' => 'ROUTE-CALLBACK-001']);
 
-    $response = $this->get('/fahipay/callback/success?' . http_build_query($request->query->all()));
+    $response = $this->get('/fahipay/callback/success?'.http_build_query($request->query->all()));
 
     $response->assertOk();
     expect(FahipayPayment::where('transaction_id', 'ROUTE-CALLBACK-001')->first()->status)
@@ -127,7 +128,7 @@ test('signed error route updates package payment record as failed', function () 
         'Signature' => $gateway->generateCallbackSignature('false', 'ROUTE-ERROR-001', null),
     ];
 
-    $response = $this->get('/fahipay/callback/error?' . http_build_query($query));
+    $response = $this->get('/fahipay/callback/error?'.http_build_query($query));
 
     $response->assertOk();
     $payment = FahipayPayment::where('transaction_id', 'ROUTE-ERROR-001')->first();
@@ -147,7 +148,7 @@ test('signed cancel route updates package payment record as cancelled', function
         'Signature' => $gateway->generateCallbackSignature('false', 'ROUTE-CANCEL-001', null),
     ];
 
-    $response = $this->get('/fahipay/callback/cancel?' . http_build_query($query));
+    $response = $this->get('/fahipay/callback/cancel?'.http_build_query($query));
 
     $response->assertOk();
     expect(FahipayPayment::where('transaction_id', 'ROUTE-CANCEL-001')->first()->status)
@@ -169,13 +170,13 @@ test('unsigned failed callback is display-only and not state-changing', function
     expect($gateway->validateCallback($request))->toBeFalse();
     expect($gateway->validateStateChangingCallback($request))->toBeFalse();
     expect(fn () => $gateway->handleCallback($request))
-        ->toThrow(\Fahipay\Gateway\Exceptions\FahipayException::class);
+        ->toThrow(FahipayException::class);
 });
 
 test('unsigned error route renders without changing package payment record', function () {
     FahipayPayment::createPayment('ROUTE-ERROR-UNSIGNED', 'test_shop', 75.00);
 
-    $response = $this->get('/fahipay/callback/error?' . http_build_query([
+    $response = $this->get('/fahipay/callback/error?'.http_build_query([
         'Success' => 'false',
         'ShoppingCartID' => 'ROUTE-ERROR-UNSIGNED',
         'ErrorMessage' => 'Insufficient funds',
@@ -189,7 +190,7 @@ test('unsigned error route renders without changing package payment record', fun
 test('unsigned cancel route renders without changing package payment record', function () {
     FahipayPayment::createPayment('ROUTE-CANCEL-UNSIGNED', 'test_shop', 75.00);
 
-    $response = $this->get('/fahipay/callback/cancel?' . http_build_query([
+    $response = $this->get('/fahipay/callback/cancel?'.http_build_query([
         'Success' => 'false',
         'ShoppingCartID' => 'ROUTE-CANCEL-UNSIGNED',
     ]));
@@ -203,7 +204,7 @@ test('rejects callbacks when gateway credentials are missing', function () {
     config(['fahipay.shop_id' => '']);
     config(['fahipay.secret_key' => '']);
 
-    $gateway = new FahipayGateway();
+    $gateway = new FahipayGateway;
     $request = Request::create('/callback', 'GET', [
         'Success' => 'false',
         'ShoppingCartID' => 'FAILED-UNCONFIGURED',

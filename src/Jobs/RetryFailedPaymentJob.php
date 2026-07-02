@@ -16,6 +16,7 @@ class RetryFailedPaymentJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 5;
+
     public int $backoff = 120;
 
     public function __construct(
@@ -26,10 +27,11 @@ class RetryFailedPaymentJob implements ShouldQueue
     {
         $payment = FahipayPayment::where('transaction_id', $this->transactionId)->first();
 
-        if (!$payment || $payment->status->value !== 'failed') {
-            Log::info("Skipping retry - payment not in failed state", [
+        if (! $payment || $payment->status->value !== 'failed') {
+            Log::info('Skipping retry - payment not in failed state', [
                 'transaction_id' => $this->transactionId,
             ]);
+
             return;
         }
 
@@ -38,16 +40,16 @@ class RetryFailedPaymentJob implements ShouldQueue
 
             if ($transaction->isSuccessful()) {
                 $payment->markAsCompleted($transaction->approvalCode);
-                Log::info("Payment recovered via retry", [
+                Log::info('Payment recovered via retry', [
                     'transaction_id' => $this->transactionId,
                 ]);
             } elseif ($transaction->isPending()) {
-                Log::info("Payment still pending", [
+                Log::info('Payment still pending', [
                     'transaction_id' => $this->transactionId,
                 ]);
             }
         } catch (\Exception $e) {
-            Log::warning("Retry check failed", [
+            Log::warning('Retry check failed', [
                 'transaction_id' => $this->transactionId,
                 'error' => $e->getMessage(),
             ]);
@@ -56,7 +58,7 @@ class RetryFailedPaymentJob implements ShouldQueue
 
     public function failed(\Throwable $exception): void
     {
-        Log::error("Payment retry job failed", [
+        Log::error('Payment retry job failed', [
             'transaction_id' => $this->transactionId,
             'error' => $exception->getMessage(),
         ]);

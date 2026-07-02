@@ -2,8 +2,10 @@
 
 namespace Fahipay\Gateway\Http\Requests;
 
+use Fahipay\Gateway\FahipayGateway;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class HandleCallbackRequest extends FormRequest
 {
@@ -12,6 +14,9 @@ class HandleCallbackRequest extends FormRequest
         return true;
     }
 
+    /**
+     * @return array<string, array<int, mixed>>
+     */
     public function rules(): array
     {
         return [
@@ -24,12 +29,12 @@ class HandleCallbackRequest extends FormRequest
         ];
     }
 
-    public function withValidator($validator): void
+    public function withValidator(Validator $validator): void
     {
         $validator->after(function ($validator) {
-            $gateway = app(\Fahipay\Gateway\FahipayGateway::class);
+            $gateway = app(FahipayGateway::class);
 
-            if (!$gateway->validateCallback($this)) {
+            if (! $gateway->validateCallback($this)) {
                 $validator->errors()->add('Signature', 'Invalid signature');
             }
         });

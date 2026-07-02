@@ -10,7 +10,6 @@ use Fahipay\Gateway\Enums\PaymentStatus;
 use Fahipay\Gateway\Events\PaymentCompletedEvent;
 use Fahipay\Gateway\Events\PaymentFailedEvent;
 use Fahipay\Gateway\Events\PaymentInitiatedEvent;
-use Fahipay\Gateway\Events\PaymentPendingEvent;
 use Fahipay\Gateway\Exceptions\FahipayException;
 use Fahipay\Gateway\Models\FahipayPayment;
 use Illuminate\Http\Request;
@@ -43,8 +42,10 @@ class FahipayGateway implements GatewayInterface
 
     protected ?string $lastTransactionId = null;
 
+    /** @var array<string, mixed>|null */
     protected ?array $lastResponse = null;
 
+    /** @var array<string, mixed> */
     protected array $config = [];
 
     public function __construct()
@@ -167,6 +168,8 @@ class FahipayGateway implements GatewayInterface
      * Create a new payment transaction
      *
      * Uses the API endpoint: POST https://fahipay.mv/api/merchants/createTxn/
+     *
+     * @param  array<string, mixed>|null  $metadata
      */
     public function createPayment(string $transactionId, float $amount, ?string $description = null, ?array $metadata = []): PaymentData
     {
@@ -220,6 +223,8 @@ class FahipayGateway implements GatewayInterface
 
     /**
      * Create payment with array config
+     *
+     * @param  array<string, mixed>  $config
      */
     public function create(array $config): PaymentData
     {
@@ -270,6 +275,9 @@ class FahipayGateway implements GatewayInterface
         throw new FahipayException('Unable to create FahiPay payment redirect');
     }
 
+    /**
+     * @param  array<string, mixed>  $params
+     */
     protected function requestPaymentRedirect(string $webUrl, array $params, string $cookiePath): ?string
     {
         $ch = curl_init();
@@ -291,7 +299,7 @@ class FahipayGateway implements GatewayInterface
         $info = curl_getinfo($ch);
         curl_close($ch);
 
-        if ($response === false || ! in_array((int) ($info['http_code'] ?? 0), [301, 302], true)) {
+        if ($response === false || ! in_array((int) $info['http_code'], [301, 302], true)) {
             return null;
         }
 
@@ -496,19 +504,17 @@ class FahipayGateway implements GatewayInterface
         $payment = FahipayPayment::where('transaction_id', $transactionId)->first();
 
         if ($payment) {
-            match ($status) {
-                PaymentStatus::COMPLETED => $payment->markAsCompleted($approvalCode),
-                PaymentStatus::FAILED => $payment->markAsFailed($request->get('ErrorMessage', $request->get('Message', 'Payment failed'))),
-                default => null,
-            };
+            if ($status === PaymentStatus::COMPLETED) {
+                $payment->markAsCompleted($approvalCode);
+            } else {
+                $payment->markAsFailed($request->get('ErrorMessage', $request->get('Message', 'Payment failed')));
+            }
         } else {
             $errorMessage = $request->get('ErrorMessage', $request->get('Message', 'Payment failed'));
 
-            Event::dispatch(match ($status) {
-                PaymentStatus::COMPLETED => new PaymentCompletedEvent($transactionId, $approvalCode),
-                PaymentStatus::FAILED => new PaymentFailedEvent($transactionId, $errorMessage),
-                default => new PaymentPendingEvent($transactionId),
-            });
+            Event::dispatch($status === PaymentStatus::COMPLETED
+                ? new PaymentCompletedEvent($transactionId, $approvalCode)
+                : new PaymentFailedEvent($transactionId, $errorMessage));
         }
 
         Cache::forget("fahipay_payment_{$transactionId}");
@@ -589,6 +595,10 @@ class FahipayGateway implements GatewayInterface
 
     /**
      * Make API request
+     *
+     * @param  array<string, mixed>  $data
+     * @param  array<string, string>  $headers
+     * @return array<string, mixed>
      */
     protected function makeRequest(string $endpoint, array $data, string $method = 'POST', array $headers = []): array
     {
@@ -656,6 +666,8 @@ class FahipayGateway implements GatewayInterface
 
     /**
      * Get last response
+     *
+     * @return array<string, mixed>|null
      */
     public function getLastResponse(): ?array
     {
@@ -672,6 +684,8 @@ class FahipayGateway implements GatewayInterface
 
     /**
      * Get config
+     *
+     * @return array<string, mixed>
      */
     public function getConfig(): array
     {

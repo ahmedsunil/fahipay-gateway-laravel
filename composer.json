@@ -19,20 +19,22 @@
     "homepage": "https://github.com/eragon2020-dev/fahipay-gateway-laravel",
     "require": {
         "php": "^8.2",
-        "laravel/framework": "^11.0|^12.0|^13.0",
-        "illuminate/contracts": "^11.0|^12.0|^13.0",
+        "laravel/framework": "^11.0|^12.0",
+        "illuminate/contracts": "^11.0|^12.0",
         "spatie/laravel-data": "^4.0"
     },
     "suggest": {
         "livewire/livewire": "Required for Livewire payment components"
     },
     "require-dev": {
+        "larastan/larastan": "^2.9|^3.0",
         "laravel/pint": "^1.14",
+        "livewire/livewire": "^3.0",
         "mockery/mockery": "^1.6",
         "nunomaduro/collision": "^8.1",
-        "orchestra/testbench": "^9.0",
-        "pestphp/pest": "^2.34",
-        "pestphp/pest-plugin-laravel": "^2.4",
+        "orchestra/testbench": "^9.0|^10.0",
+        "pestphp/pest": "^2.34|^3.0",
+        "pestphp/pest-plugin-laravel": "^2.4|^3.0",
         "php-http/mock-client": "^1.6"
     },
     "autoload": {
@@ -60,7 +62,10 @@
     },
     "scripts": {
         "test": "pest",
-        "test:coverage": "pest --coverage"
+        "test:coverage": "pest --coverage",
+        "analyse": "phpstan analyse",
+        "format": "pint",
+        "format:check": "pint --test"
     },
     "minimum-stability": "stable",
     "prefer-stable": true,

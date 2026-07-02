@@ -8,6 +8,9 @@ use Spatie\LaravelData\Data;
 
 class TransactionData extends Data
 {
+    /**
+     * @param  array<string, mixed>  $rawResponse
+     */
     public function __construct(
         public string $transactionId,
         public float $amount,

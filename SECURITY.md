@@ -8,98 +8,80 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability within this package, please send an e-mail to support@fahipay.mv. All security vulnerabilities will be promptly addressed.
+If you discover a security vulnerability within this package, please email
+support@fahipay.mv. Do not open a public GitHub issue for security reports.
+You will receive an acknowledgement within 72 hours, and we will keep you
+informed while the issue is triaged and fixed.
 
-## Security Features Implemented
+## Security Model
 
-### 1. Signature Verification
-- HMAC-SHA256 signatures for all API requests
-- Timing-attack safe comparison using `hash_equals()`
-- Callback signature validation before processing
+### Signature scheme
 
-### 2. Input Validation
-- Transaction ID format validation (alphanumeric, dashes, underscores only)
-- Amount validation (min/max limits)
-- URL validation for callback endpoints
-- SQL injection prevention via parameterized queries
+FahiPay's API dictates the signature format: `base64(sha1(ShopID . SecretKey .
+ShoppingCartID . SecretKey . value . SecretKey))`. This is **not** HMAC — it is
+the scheme required by the FahiPay merchant specification, and the package
+cannot unilaterally change it. Within that constraint the package:
 
-### 3. CSRF Protection
-- Laravel's built-in CSRF protection for web routes
-- Form token verification for payment initiation
+- verifies every signature with `hash_equals()` (constant-time comparison);
+- rejects unsigned success callbacks outright;
+- requires an approval code on success callbacks;
+- treats unsigned failed/cancel browser returns as display-only — they can
+  never change payment state or fire package events.
 
-### 4. Rate Limiting
-- Laravel's default throttle middleware available
-- Configurable API rate limiting
+### Replay protection
 
-### 5. Secure Configuration
-- No sensitive data in error responses
-- Environment-based credential storage
-- Secret key never exposed in logs or responses
+The signature contains no timestamp or nonce, so a captured callback can be
+replayed. The package mitigates this with terminal payment states: once a
+payment is COMPLETED, replayed or late failure/cancel callbacks are ignored.
+Status transitions run inside a database transaction with a pessimistic lock,
+so concurrent webhook deliveries and the expiry job cannot interleave.
 
-## Security Best Practices
+### Endpoint protection
 
-### For Integration
+- The webhook endpoint is authenticated by the callback signature and rate
+  limited (`throttle:60,1`) by default. It intentionally carries no `auth`
+  middleware, because FahiPay's servers cannot authenticate against your app.
+- The optional payments API requires an authenticated middleware stack
+  (default `['api', 'auth']`) and is disabled by default.
+- Administrative endpoints (list all payments, update, delete) are separately
+  disabled by default and require their own authenticated middleware
+  (`auth:sanctum` by default) to enable.
 
-1. **Always verify callbacks**
+### Input validation
+
+- Transaction IDs must match `^[A-Za-z0-9\-_]{1,100}$` everywhere they enter
+  the package (API, Livewire, gateway calls).
+- Amounts are validated against min/max bounds before signing.
+- Custom callback/redirect URLs are rejected unless their host appears in the
+  `allowed_redirect_hosts` allow-list (or unrestricted mode is explicitly
+  enabled). Gateway redirect responses are validated against a fixed FahiPay
+  host allow-list to prevent SSRF.
+- Database access goes through Eloquent with parameter binding.
+
+### Data exposure
+
+- The secret key is never included in API responses, logs, or error messages.
+- Webhook error responses return generic messages; details go to logs only.
+- Livewire component amount and transaction id are `#[Locked]` so the client
+  cannot tamper with them.
+
+## Integration Best Practices
+
+1. **Always verify callbacks** — never trust the `Success` parameter alone:
+
 ```php
-// Never trust Success parameter alone
-if (!$gateway->validateCallback($request)) {
+if (! $gateway->validateCallback($request)) {
     return response('Invalid signature', 403);
 }
 ```
 
-2. **Use HTTPS in production**
-```php
-// In .env
-FAHIPAY_BASE_URL=https://api.fahipay.mv
-FAHIPAY_WEB_URL=https://fahipay.mv
-```
+2. **Use HTTPS in production** for all configured URLs.
 
-3. **Store transaction IDs**
-```php
-// Always record transactions in your database
-$payment = FahipayPayment::createPayment(
-    $transactionId,
-    $merchantId,
-    $amount
-);
-```
+3. **Record every transaction** in your database via `FahipayPayment` so
+   webhook state transitions and the expiry job can reconcile them.
 
-4. **Handle events properly**
-```php
-// Listen to events for reliable processing
-Event::listen(PaymentCompletedEvent::class, function ($event) {
-    Order::where('transaction_id', $event->transactionId)
-        ->update(['status' => 'paid']);
-});
-```
+4. **Drive order fulfilment from events** (`PaymentCompletedEvent`), not from
+   browser return URLs — returns are display-only.
 
-5. **Implement idempotency**
-```php
-// Check if transaction already processed
-if ($existingPayment->status === PaymentStatus::COMPLETED) {
-    return response()->json(['status' => 'already_processed']);
-}
-```
-
-## Known Considerations
-
-### Timing Attacks
-- Signature verification uses `hash_equals()` to prevent timing attacks
-
-### Race Conditions
-- Database unique constraints on transaction_id
-- Idempotent payment processing recommended
-
-### Data Sanitization
-- Transaction IDs are validated against a strict pattern
-- All user input is sanitized before processing
-
-## Changelog
-
-### 1.0.x
-- Added signature validation
-- Added input sanitization
-- Added CSRF protection
-- Added rate limiting options
-- Added webhook signature verification middleware
+5. **Keep the admin API disabled** unless you need it, and only enable it
+   behind authenticated middleware.

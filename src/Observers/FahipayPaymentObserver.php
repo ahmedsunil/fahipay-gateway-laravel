@@ -2,14 +2,18 @@
 
 namespace Fahipay\Gateway\Observers;
 
-use Fahipay\Gateway\Models\FahipayPayment;
 use Fahipay\Gateway\Enums\PaymentStatus;
+use Fahipay\Gateway\Events\PaymentCancelledEvent;
+use Fahipay\Gateway\Events\PaymentCompletedEvent;
+use Fahipay\Gateway\Events\PaymentFailedEvent;
+use Fahipay\Gateway\Models\FahipayPayment;
+use Illuminate\Support\Facades\Log;
 
 class FahipayPaymentObserver
 {
     public function created(FahipayPayment $payment): void
     {
-        \Illuminate\Support\Facades\Log::info('FahiPay: Payment created', [
+        Log::info('FahiPay: Payment created', [
             'transaction_id' => $payment->transaction_id,
             'amount' => $payment->amount,
             'status' => $payment->status->value,
@@ -25,24 +29,24 @@ class FahipayPaymentObserver
                 : PaymentStatus::fromString((string) $originalStatus);
             $newStatus = $payment->status;
 
-            \Illuminate\Support\Facades\Log::info('FahiPay: Payment status changed', [
+            Log::info('FahiPay: Payment status changed', [
                 'transaction_id' => $payment->transaction_id,
                 'old_status' => $oldStatus->value,
                 'new_status' => $newStatus->value,
             ]);
 
             if ($newStatus === PaymentStatus::COMPLETED && $oldStatus !== PaymentStatus::COMPLETED) {
-                event(new \Fahipay\Gateway\Events\PaymentCompletedEvent(
+                event(new PaymentCompletedEvent(
                     $payment->transaction_id,
                     $payment->approval_code
                 ));
             } elseif ($newStatus === PaymentStatus::FAILED && $oldStatus !== PaymentStatus::FAILED) {
-                event(new \Fahipay\Gateway\Events\PaymentFailedEvent(
+                event(new PaymentFailedEvent(
                     $payment->transaction_id,
                     $payment->error_message
                 ));
             } elseif ($newStatus === PaymentStatus::CANCELLED && $oldStatus !== PaymentStatus::CANCELLED) {
-                event(new \Fahipay\Gateway\Events\PaymentCancelledEvent(
+                event(new PaymentCancelledEvent(
                     $payment->transaction_id
                 ));
             }
@@ -51,7 +55,7 @@ class FahipayPaymentObserver
 
     public function deleted(FahipayPayment $payment): void
     {
-        \Illuminate\Support\Facades\Log::warning('FahiPay: Payment deleted', [
+        Log::warning('FahiPay: Payment deleted', [
             'transaction_id' => $payment->transaction_id,
         ]);
     }

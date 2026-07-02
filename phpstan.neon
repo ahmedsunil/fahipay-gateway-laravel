@@ -1,0 +1,20 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 6
+    paths:
+        - src
+        - config
+        - database
+        - routes
+    tmpDir: .phpstan.cache
+    ignoreErrors:
+        # Package config files legitimately call env(); consuming apps publish
+        # the file into their own config directory where caching works.
+        -
+            identifier: larastan.noEnvCallsOutsideOfConfig
+            path: config/fahipay.php
+        # Package views use the 'fahipay::' namespace, which larastan cannot
+        # resolve during standalone analysis.
+        - '#Parameter \#1 \$view of function view expects view-string#'
